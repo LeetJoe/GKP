@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import torch
 import transformers
+import os
 
 def score_for_input(args, tokenizer, model, query, cands, knowledge=None):
     source, targets = None, None
@@ -140,6 +141,8 @@ def main():
     parser.add_argument('--n', type=int, default=None)
     args = parser.parse_args()
     args.output_path = f'data/{args.task}/inference/inference_{"" if args.model_ckpt is None else "ft"}{args.model_type.split("/")[-1]}.{args.input_path.split("/")[-1]}'
+    print(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+    exit(0)
 
     tokenizer = transformers.T5Tokenizer.from_pretrained(args.model_type)
     model = transformers.T5ForConditionalGeneration.from_pretrained(args.model_ckpt if args.model_ckpt is not None else args.model_type)
