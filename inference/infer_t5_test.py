@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import torch
 import transformers
+import time
 import os
 
 def score_for_input(args, tokenizer, model, query, cands, knowledge=None):
@@ -44,6 +45,13 @@ def score_for_input(args, tokenizer, model, query, cands, knowledge=None):
     if source is None or targets is None:
         raise Exception(f'score_for_input() not implemented for {args.task} {args.model_type}!')
 
+    '''
+    print('source')
+    print(source)
+    print('targets')
+    print(targets)
+    '''
+
     scores = []
     input_ids = tokenizer(source, return_tensors='pt').input_ids.cuda()
     for i, cand in enumerate(cands):
@@ -70,15 +78,18 @@ def score_for_query(args, tokenizer, model, query, knowledges, cands):
     if v == -1:
         v = n // h
 
+    # now h is the group size of knowledge while v is the number of groups
+
     scores_, probs_ = [], []
 
-    # a pass w/o knowledge
+    # a pass w/o knowledge, w/o means without
     scores, probs = score_for_input(args, tokenizer, model, query, cands)
     scores_.append(scores)
     probs_.append(probs)
 
     # with knowledge
     if len(knowledges) > 0:
+        # here h is always 1 so each knowledge can get one answer combined with the same query
         for i in range(0, v * h, h):
             knowledge = ' '.join(knowledges[i:i+h])
             scores, probs = score_for_input(args, tokenizer, model, query, cands, knowledge)
@@ -91,7 +102,10 @@ def checker(args, answer, pred):
     return 1 if answer == pred else 0
 
 def process_item(args, tokenizer, model, item):
+    # the question, string
     query = item['query'] if 'query' in item else item['question']
+
+    # cands means candidates, or options, it is a list
     if 'cands' in item:
         cands = item['cands']
     elif args.task == 'csqa2':
@@ -99,6 +113,7 @@ def process_item(args, tokenizer, model, item):
     else:
         raise Exception('process_item() not implemented for {args.task}!')
 
+    # the knowledge in list
     knowledges = item['knowledges'] if 'knowledges' in item else []
     scores_, probs_ = score_for_query(args, tokenizer, model, query, knowledges, cands)
     scores, _ = torch.max(scores_, dim=0)
@@ -134,13 +149,30 @@ def main():
     parser.add_argument('--model-ckpt', type=str, default=None)
     parser.add_argument('--input-path', type=str, required=True)
     parser.add_argument('--average-loss', action='store_true')
+
+    # h and v is used to divide knowledges into groups for process, h or v can both be the group size base on their init value.
+    # usually h is the group size and v is the number of groups. they are used in the score_for_query method.
     parser.add_argument('--h', type=int, default=1)
     parser.add_argument('--v', type=int, default=-1)
+
     parser.add_argument('--aggfunc', type=str, default='best_prob', choices=['best_score', 'best_prob', 'poe', 'moe'])
     parser.add_argument('--interactive', action='store_true')
-    parser.add_argument('--n', type=int, default=None)
+    parser.add_argument('--n', type=int, default=None, help='truncate the head n items from the input dataset')
     args = parser.parse_args()
-    args.output_path = f'../data/{args.task}/inference/inference_{"" if args.model_ckpt is None else "ft"}{args.model_type.split("/")[-1]}.{args.input_path.split("/")[-1]}'
+    print('input data:')
+    print(args.input_path)
+    print('model type:')
+    print(args.model_type)
+    args.output_path = f'data/{args.task}/inference/inference_{"" if args.model_ckpt is None else "ft"}{args.model_type.split("/")[-1]}.{args.input_path.split("/")[-1]}'
+    print('output data:')
+    print(args.output_path)
+
+    '''
+    tokenizer = transformers.T5Tokenizer.from_pretrained('allenai/unifiedqa-t5-11b')
+    model = transformers.T5ForConditionalGeneration.from_pretrained('allenai/unifiedqa-t5-11b')
+    model.cuda(2)
+    model.eval()
+    '''
 
     tokenizer = transformers.T5Tokenizer.from_pretrained(args.model_type)
     model = transformers.T5ForConditionalGeneration.from_pretrained(args.model_ckpt if args.model_ckpt is not None else args.model_type)
@@ -171,7 +203,10 @@ def main():
     pbar = tqdm(ds)
     num, den = 0, 0
     for item in pbar:
+        # print(item)
         process_item(args, tokenizer, model, item)
+        # print(item)
+
         if 'ok' in item:
             num += item['ok']
             den += 1
@@ -181,5 +216,8 @@ def main():
         json.dump(ds, f, indent=4)
 
 if __name__ == '__main__':
+    start_time = time.time()
     main()
+    end_time = time.time()
+    print('time cost: %f' % (end_time - start_time))
 
