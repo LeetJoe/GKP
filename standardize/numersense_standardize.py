@@ -17,6 +17,6 @@ for split, path in split2path.items():
             else:
                 query = line.strip('\n').strip(' ')
                 ds.append({'query': query})
-    with open('../data/numersense/%s.json' % split, 'w') as f:
+    with open('../data_test/numersense/%s.json' % split, 'w') as f:
         json.dump(ds, f, indent=4)
 
