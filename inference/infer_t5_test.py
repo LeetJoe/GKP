@@ -140,9 +140,7 @@ def main():
     parser.add_argument('--interactive', action='store_true')
     parser.add_argument('--n', type=int, default=None)
     args = parser.parse_args()
-    args.output_path = f'data/{args.task}/inference/inference_{"" if args.model_ckpt is None else "ft"}{args.model_type.split("/")[-1]}.{args.input_path.split("/")[-1]}'
-    print(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
-    exit(0)
+    args.output_path = f'../data/{args.task}/inference/inference_{"" if args.model_ckpt is None else "ft"}{args.model_type.split("/")[-1]}.{args.input_path.split("/")[-1]}'
 
     tokenizer = transformers.T5Tokenizer.from_pretrained(args.model_type)
     model = transformers.T5ForConditionalGeneration.from_pretrained(args.model_ckpt if args.model_ckpt is not None else args.model_type)
